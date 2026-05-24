@@ -41,7 +41,7 @@ def aes_encrypt(hex_data):
 # --- API ROUTES ---
 @app.route('/')
 def home():
-    return "BigBull Custom API is Live!"
+    return "TUFANFF95 Custom API is Live!"
 
 @app.route('/gen')
 def gen():
@@ -55,13 +55,13 @@ def gen():
         if u_pass:
             password = u_pass
         else:
-            password = "BB_" + ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+            password = "TUFANFF95_" + ''.join(random.choices(string.ascii_letters + string.digits, k=8))
 
         # જો નામ ના આપ્યો હોય તો રેન્ડમ બનાવો
         if u_name:
             final_name = u_name
         else:
-            final_name = "BigBull" + str(random.randint(100, 999))
+            final_name = "TUFAN" + str(random.randint(100, 999))
         
         # 1. Register Garena Guest
         reg_res = requests.post("https://100067.connect.garena.com/api/v2/oauth/guest:register", 
