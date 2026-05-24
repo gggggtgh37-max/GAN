@@ -1,3 +1,4 @@
-Flask
+fastapi
 requests
 pycryptodome
+uvicorn
