@@ -4,6 +4,7 @@ import random
 import string
 import base64
 import json
+import re
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
 
@@ -40,24 +41,19 @@ def aes_encrypt(hex_data):
     cipher = AES.new(aes_key, AES.MODE_CBC, iv)
     return cipher.encrypt(pad(data, AES.block_size))
 
-def get_account_id_from_jwt(jwt_token):
+def parse_account_id(jwt_token):
     try:
         parts = jwt_token.split('.')
         if len(parts) >= 2:
             payload = parts[1]
-            # Base64 padding fix
-            padding = 4 - (len(payload) % 4)
-            if padding != 4: payload += "=" * padding
-            decoded = json.loads(base64.b64decode(payload).decode('utf-8'))
-            return str(decoded.get('account_id') or decoded.get('external_id') or "N/A")
-    except:
-        return "N/A"
+            payload += "=" * (4 - len(payload) % 4)
+            data = json.loads(base64.b64decode(payload).decode('utf-8'))
+            return str(data.get('account_id') or data.get('external_id', 'N/A'))
+    except: return "N/A"
     return "N/A"
 
-# --- API ROUTES ---
 @app.route('/')
-def home():
-    return "TUFANFF95 Real ID API is Live!"
+def home(): return "TUFAN REAL ID API IS ACTIVE!"
 
 @app.route('/gen')
 def gen():
@@ -69,49 +65,43 @@ def gen():
         password = u_pass if u_pass else "TUFAN_" + ''.join(random.choices(string.ascii_letters + string.digits, k=8))
         final_name = u_name if u_name else "TUFAN" + str(random.randint(100, 999))
         
-        # 1. Register
+        # 1. Register Guest
         reg_res = requests.post("https://100067.connect.garena.com/api/v2/oauth/guest:register", 
                                 json={"app_id": 100067, "client_type": 2, "password": password, "source": 2}, timeout=15).json()
         uid = reg_res["data"]["uid"]
 
-        # 2. Token
+        # 2. Grant Token
         tok_res = requests.post("https://100067.connect.garena.com/oauth/guest/token/grant", 
                                  data={"uid": uid, "password": password, "response_type": "token", "client_type": "2", "client_secret": HEX_KEY, "client_id": "100067"}, timeout=15).json()
         access_token = tok_res["access_token"]
         open_id = tok_res["open_id"]
 
-        # 3. Major Register (Set Nickname)
-        major_reg_url = "https://loginbp.ggblueshark.com/MajorRegister"
-        if region in ["ME", "TH"]: major_reg_url = "https://loginbp.common.ggbluefox.com/MajorRegister"
+        # 3. Major Register
+        major_url = "https://loginbp.ggblueshark.com/MajorRegister"
+        if region in ["ME", "TH"]: major_url = "https://loginbp.common.ggbluefox.com/MajorRegister"
         
         lang = REGION_LANG.get(region, "en")
-        reg_payload = {1: final_name, 2: access_token, 3: open_id, 5: 102000007, 6: 4, 7: 1, 15: lang}
-        requests.post(major_reg_url, data=aes_encrypt(build_proto(reg_payload).hex()), timeout=15)
+        reg_proto = build_proto({1: final_name, 2: access_token, 3: open_id, 15: lang})
+        requests.post(major_url, data=aes_encrypt(reg_proto.hex()), timeout=15)
 
-        # 4. Major Login (To get Real Account ID)
-        major_login_url = "https://loginbp.ggblueshark.com/MajorLogin"
-        if region in ["ME", "TH"]: major_login_url = "https://loginbp.common.ggbluefox.com/MajorLogin"
+        # 4. Major Login (Corrected logic to get real ID)
+        login_url = "https://loginbp.ggblueshark.com/MajorLogin"
+        if region in ["ME", "TH"]: login_url = "https://loginbp.common.ggbluefox.com/MajorLogin"
         
-        # simplified login payload logic
-        login_payload = build_proto({1: open_id, 2: access_token, 3: lang})
-        login_res = requests.post(major_login_url, data=aes_encrypt(login_payload.hex()), timeout=15)
+        # Proper Login Payload Structure
+        login_proto = build_proto({31: open_id, 32: access_token, 15: lang})
+        login_res = requests.post(login_url, data=aes_encrypt(login_proto.hex()), timeout=20)
         
         account_id = "N/A"
-        if "eyJ" in login_res.text:
-            jwt_start = login_res.text.find("eyJ")
-            jwt_token = login_res.text[jwt_start:].split()[0].split('\\')[0].split('"')[0]
-            account_id = get_account_id_from_jwt(jwt_token)
+        jwt_match = re.search(r'eyJ[a-zA-Z0-9\._\-]+', login_res.text)
+        if jwt_match:
+            account_id = parse_account_id(jwt_match.group(0))
 
         return jsonify({
-            "status": "success", 
-            "uid": str(uid),
-            "account_id": account_id, 
-            "password": password, 
-            "name": final_name, 
-            "region": region
+            "status": "success", "uid": str(uid), "account_id": account_id, 
+            "password": password, "name": final_name, "region": region
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-def handler(event, context):
-    return app(event, context)
+def handler(event, context): return app(event, context)
