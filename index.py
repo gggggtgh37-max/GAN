@@ -41,36 +41,59 @@ def aes_encrypt(hex_data):
 # --- API ROUTES ---
 @app.route('/')
 def home():
-    return "BigBull Garena API is Live on Vercel!"
+    return "BigBull Custom API is Live!"
 
 @app.route('/gen')
 def gen():
     try:
-        name_prefix = request.args.get('name', 'BigBull')
+        # યુઝર પાસેથી ડેટા લેવો
+        u_name = request.args.get('name')
+        u_pass = request.args.get('password')
         region = request.args.get('region', 'IND').upper()
-        password = "BB_" + ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+
+        # જો પાસવર્ડ ના આપ્યો હોય તો રેન્ડમ બનાવો
+        if u_pass:
+            password = u_pass
+        else:
+            password = "BB_" + ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+
+        # જો નામ ના આપ્યો હોય તો રેન્ડમ બનાવો
+        if u_name:
+            final_name = u_name
+        else:
+            final_name = "BigBull" + str(random.randint(100, 999))
         
-        # 1. Register
+        # 1. Register Garena Guest
         reg_res = requests.post("https://100067.connect.garena.com/api/v2/oauth/guest:register", 
                                 json={"app_id": 100067, "client_type": 2, "password": password, "source": 2}, timeout=15).json()
+        
+        if "data" not in reg_res:
+            return jsonify({"status": "error", "message": "Registration Failed", "details": reg_res})
+            
         uid = reg_res["data"]["uid"]
 
-        # 2. Token
+        # 2. Token Grant
         tok_res = requests.post("https://100067.connect.garena.com/oauth/guest/token/grant", 
                                  data={"uid": uid, "password": password, "response_type": "token", "client_type": "2", "client_secret": HEX_KEY, "client_id": "100067"}, timeout=15).json()
+        
         access_token = tok_res["access_token"]
         open_id = tok_res["open_id"]
 
-        # 3. Major Register
+        # 3. Major Register (Set Name)
         major_url = "https://loginbp.ggblueshark.com/MajorRegister"
         if region in ["ME", "TH"]: major_url = "https://loginbp.common.ggbluefox.com/MajorRegister"
         
-        final_name = f"{name_prefix}{random.randint(10,99)}"
         lang = REGION_LANG.get(region, "en")
         payload = {1: final_name, 2: access_token, 3: open_id, 5: 102000007, 6: 4, 7: 1, 13: 1, 15: lang}
         requests.post(major_url, data=aes_encrypt(build_proto(payload).hex()), timeout=15)
 
-        return jsonify({"status": "success", "uid": str(uid), "password": password, "name": final_name, "region": region})
+        return jsonify({
+            "status": "success", 
+            "uid": str(uid), 
+            "password": password, 
+            "name": final_name, 
+            "region": region
+        })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
